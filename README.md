@@ -11,16 +11,16 @@ An educational framework exploring ergonomic, lightweight multi-agent orchestrat
 
 ## Install
 
-Requires Python 3.10+
+Requires Python 3.10+ 
 
 ```shell
-pip install git+ssh://git@github.com/openai/swarm.git
+pip install git+ssh://git@github.com/velascoluis/swarm-gemini.git
 ```
 
 or
 
 ```shell
-pip install git+https://github.com/openai/swarm.git
+pip install git+https://github.com/velascoluis/swarm-gemini.git
 ```
 
 ## Usage
@@ -28,19 +28,33 @@ pip install git+https://github.com/openai/swarm.git
 ```python
 from swarm import Swarm, Agent
 
-client = Swarm()
+#For Google Vertex AI
+client = Swarm(llm_provider="vertexai", project_id="YOUR_PROJECT_ID", location="YOUR_LOCATION")
+#For OpenAI
+client = Swarm(llm_provider="openai")
 
 def transfer_to_agent_b():
     return agent_b
 
+#Supported Gemini models: 
+
+# "google/gemini-1.5-flash",
+# "google/gemini-1.5-pro",
+# "google/gemini-1.0-pro-vision",
+# "google/gemini-1.0-pro-vision-001",
+# "google/gemini-1.0-pro-002",
+# "google/gemini-1.0-pro-001",
+# "google/gemini-1.0-pro"
 
 agent_a = Agent(
+    model="google/gemini-1.5-pro",
     name="Agent A",
     instructions="You are a helpful agent.",
     functions=[transfer_to_agent_b],
 )
 
 agent_b = Agent(
+    model="google/gemini-1.5-pro",
     name="Agent B",
     instructions="Only speak in Haikus.",
 )
