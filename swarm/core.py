@@ -7,6 +7,9 @@ from typing import List, Callable, Union
 # Package/library imports
 from openai import OpenAI
 
+import vertexai
+from google.auth import default, transport
+
 
 # Local imports
 from .util import function_to_json, debug_print, merge_chunk
@@ -22,12 +25,45 @@ from .types import (
 
 __CTX_VARS_NAME__ = "context_variables"
 
+LLM_PROVIDER_OPENAI = "openai"
+LLM_PROVIDER_VERTEXAI = "vertexai"
+
+VERTEXAI_MODELS = [
+    "google/gemini-1.5-flash",
+    "google/gemini-1.5-pro",
+    "google/gemini-1.0-pro-vision",
+    "google/gemini-1.0-pro-vision-001",
+    "google/gemini-1.0-pro-002",
+    "google/gemini-1.0-pro-001",
+    "google/gemini-1.0-pro",
+]
+OPENAI_MODELS = ["gpt-4o"]
+
 
 class Swarm:
-    def __init__(self, client=None):
-        if not client:
-            client = OpenAI()
-        self.client = client
+
+    def __init__(self, llm_provider, project_id=None, location=None, client=None):
+        self.llm_provider = llm_provider
+        self.client = client or self._create_client(llm_provider, project_id, location)
+
+    def _create_client(self, llm_provider, project_id, location):
+        if llm_provider == LLM_PROVIDER_OPENAI:
+            return OpenAI()
+        elif llm_provider == LLM_PROVIDER_VERTEXAI:
+            if project_id is None or location is None:
+                raise ValueError(
+                    "For Vertex AI, both project_id and location must be provided."
+                )
+            credentials, _ = default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            credentials.refresh(transport.requests.Request())
+            return OpenAI(
+                base_url=f"https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project_id}/locations/{location}/endpoints/openapi",
+                api_key=credentials.token,
+            )
+        else:
+            raise ValueError(f"Invalid LLM provider: {llm_provider}")
 
     def get_chat_completion(
         self,
@@ -94,8 +130,7 @@ class Swarm:
         debug: bool,
     ) -> Response:
         function_map = {f.__name__: f for f in functions}
-        partial_response = Response(
-            messages=[], agent=None, context_variables={})
+        partial_response = Response(messages=[], agent=None, context_variables={})
 
         for tool_call in tool_calls:
             name = tool_call.function.name
@@ -112,8 +147,7 @@ class Swarm:
                 )
                 continue
             args = json.loads(tool_call.function.arguments)
-            debug_print(
-                debug, f"Processing tool call: {name} with arguments {args}")
+            debug_print(debug, f"Processing tool call: {name} with arguments {args}")
 
             func = function_map[name]
             # pass context_variables to agent functions
@@ -188,8 +222,7 @@ class Swarm:
                 merge_chunk(message, delta)
             yield {"delim": "end"}
 
-            message["tool_calls"] = list(
-                message.get("tool_calls", {}).values())
+            message["tool_calls"] = list(message.get("tool_calls", {}).values())
             if not message["tool_calls"]:
                 message["tool_calls"] = None
             debug_print(debug, "Received completion:", message)
@@ -228,6 +261,18 @@ class Swarm:
             )
         }
 
+    def _verify_agent_model(self, agent: Agent):
+        if self.llm_provider == LLM_PROVIDER_VERTEXAI:
+            if agent.model not in VERTEXAI_MODELS:
+                raise ValueError(
+                    f"For Vertex AI, the agent model must be one of {VERTEXAI_MODELS}"
+                )
+        elif self.llm_provider == LLM_PROVIDER_OPENAI:
+            if agent.model not in OPENAI_MODELS:
+                raise ValueError(
+                    f"For OpenAI, the agent model must be one of {OPENAI_MODELS}"
+                )
+
     def run(
         self,
         agent: Agent,
@@ -239,6 +284,8 @@ class Swarm:
         max_turns: int = float("inf"),
         execute_tools: bool = True,
     ) -> Response:
+        self._verify_agent_model(agent)
+
         if stream:
             return self.run_and_stream(
                 agent=agent,
@@ -249,6 +296,7 @@ class Swarm:
                 max_turns=max_turns,
                 execute_tools=execute_tools,
             )
+
         active_agent = agent
         context_variables = copy.deepcopy(context_variables)
         history = copy.deepcopy(messages)

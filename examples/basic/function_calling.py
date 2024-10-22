@@ -1,6 +1,10 @@
 from swarm import Swarm, Agent
 
-client = Swarm()
+client = Swarm(
+    llm_provider="vertexai",
+    project_id="YOUR_PROJECT_ID",
+    location="YOUR_LOCATION",
+)
 
 
 def get_weather(location) -> str:

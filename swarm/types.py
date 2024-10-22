@@ -13,7 +13,7 @@ AgentFunction = Callable[[], Union[str, "Agent", dict]]
 
 class Agent(BaseModel):
     name: str = "Agent"
-    model: str = "gpt-4o"
+    model: str = "google/gemini-1.5-pro"
     instructions: Union[str, Callable[[], str]] = "You are a helpful agent."
     functions: List[AgentFunction] = []
     tool_choice: str = None
